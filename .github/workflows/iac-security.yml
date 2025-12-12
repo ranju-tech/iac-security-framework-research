@@ -1,0 +1,42 @@
+name: IaC Security Pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Init
+      run: terraform init
+      working-directory: dataset/insecure
+
+    - name: Terraform Validate
+      run: terraform validate
+      working-directory: dataset/insecure
+
+    - name: Run Checkov Scan
+      uses: bridgecrewio/checkov-action@v12
+      with:
+        directory: dataset
+
+    - name: Install OPA
+      run: |
+        curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+        chmod +x opa
+        sudo mv opa /usr/local/bin/opa
+
+    - name: OPA Policy Check
+      run: |
+        opa eval --data policy/security.rego \
+        --input dataset/insecure/sg_open_ssh.tf \
+        "data.terraform.security.deny"
